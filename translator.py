@@ -12,25 +12,24 @@ def get_word(word):
     return None
 
 
-def get_translate(words):
+def get_translate(words, is_save=True):
     js_dict = {}
     error_list = []
     for word in words:
-        if r_content := get_word(word):
+        try:
+            r_content = get_word(word)
             soup = bs(r_content, 'lxml')
             cambridge_answer = ''.join([i.text for i in soup.find('div', attrs={'class': 'def ddef_d db'})])
-            js_dict[word] = cambridge_answer.replace(':', '').replace('\n', '')
-        else:
-            error_list.append(word)
-    return save_to_file(js_dict, error_list)
+        except Exception:
+            # if words not found
+            cambridge_answer = 'Sorry but this word contain mistake'
+        js_dict[word] = cambridge_answer.replace(':', '').replace('\n', '')
+        # else:
+        #     error_list.append(word)
+    return [js_dict, error_list]
 
 
-def save_to_file(js_dict, error_words: list):
-    with open('ans.txt', 'w') as f:
-        for key, translate in js_dict.items():
-            f.write(f'{key}\t{translate}\n')
-    return [js_dict, error_words]
 
 
-if __name__ == '__main__':
-    get_translate(['couch'])
+# if __name__ == '__main__':
+#     get_translate(['aboba'])

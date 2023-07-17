@@ -3,7 +3,7 @@ import openpyxl
 import openpyxl as ox
 from translator import *
 
-file_errors_location = r'1000 most used english words.xlsx'
+file_errors_location = r'680009374.xlsx'
 df = pd.read_excel(file_errors_location, index_col=None)
 df["B"] = ""
 df["C"] = ""

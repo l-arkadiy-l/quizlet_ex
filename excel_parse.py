@@ -14,7 +14,7 @@ def update_spreadsheet(path: str, ws_len: int, do_mark: [int, bool], list_remove
 
 
 def go(file, quantity_of_words: int):
-    quantity_of_words = abs(quantity_of_words)
+    quantity_of_words = abs(quantity_of_words) + 1
     eng_file = rf'{file}'
     wb = ox.load_workbook(eng_file)
     sheet = wb.active
