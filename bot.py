@@ -8,8 +8,10 @@ import openpyxl
 import sqlite3
 from excel_parse import go
 from translator import *
+from dotenv import load_dotenv
 
-TOKEN = "6218562911:AAGmPjJYvxMnjOpY3-eyzK37oQrqKSsPzCI"
+load_dotenv()
+TOKEN = os.environ.get('BOT_TOKEN')
 bot = Bot(token=TOKEN)
 dp = Dispatcher(bot)
 
@@ -21,16 +23,28 @@ def get_users_file_quantity(user_id):
     c = conn.cursor()
     # c.execute("CREATE TABLE users (id integer UNIQUE, path text)")
     try:
-        c.execute(f"INSERT INTO users VALUES ({user_id}, 'pathxl/{user_id}.xlsx', 5)")
+        c.execute(f"INSERT INTO users VALUES ({user_id}, 'pathxl/{user_id}.xlsx', 5, 'eng')")
         conn.commit()
     except sqlite3.IntegrityError:
         pass
     c.execute(f"SELECT * FROM users WHERE id={user_id}")
     p = c.fetchone()
-    file = p[-2]
-    quantity = p[-1]
+    file = p[-3]
+    quantity = p[-2]
+    language = p[-1]
     c.close()
-    return file, quantity
+    return file, quantity, language
+
+
+def change_language(user_id):
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+    c.execute(f"SELECT * FROM users WHERE id={user_id}")
+    p = c.fetchone()
+    cur_language = 'rus' if p[-1] == 'eng' else 'eng'
+    c.execute(f"UPDATE users set language = '{cur_language}' where id = {user_id}")
+    conn.commit()
+    c.close()
 
 
 def change_quantity(user_id, quantity):
@@ -62,32 +76,53 @@ def create_file(message, file: str) -> bool:
 # /info - подробный план как пользоватья (сделать в качестве картинок)
 @dp.message_handler(commands=['start'])
 async def main(message):
-    await bot.send_message(message.chat.id,
-                           'Hi, I will help you import words with translation to Quizlet or other apps! We hame commands:\n'
-                           '/set your number\n'
-                           # '/info\n'
-                           # '/set_delimeter your delimeter (by default, it is //)\n'
-                           '/add your words (example: /add cat, dog, town, light)\n'
-                           # '/change_language <- Измените язык, чтобы перейти на русский\n'
-                           '/trans your words (example: /trans cat, dog, town, light)\n'
-                           '/get_file\n'
-                           '/import_words\n'
-                           'send your xlsx file to bot')
+    user_id = message.from_user.id
+    user_file, quantity, language = get_users_file_quantity(user_id)
+    if language == 'eng':
+        await bot.send_message(message.chat.id,
+                               'Hi, I will help you import words with translation to Quizlet or other apps! We hame commands:\n'
+                               '/set your number\n'
+                               # '/info\n'
+                               # '/set_delimeter your delimeter (by default, it is //)\n'
+                               '/add your words (example: /add cat, dog, town, light)\n'
+                               '/change_language <- Измените язык, чтобы перейти на русский\n'
+                               '/trans your words (example: /trans cat, dog, town, light)\n'
+                               '/get_file\n'
+                               '/import_words\n'
+                               'send your xlsx file to bot')
+    else:
+        await bot.send_message(message.chat.id,
+                               'Привет, я помогу вам импортировать слова с переводом в Quizlet или другие приложения! У нас есть команды:\n'
+                               '/set число\n'
+                               # '/info\n'
+                               # '/set_delimeter your delimeter (by default, it is //)\n'
+                               '/add твои слова (например: /add cat, dog, town, light)\n'
+                               '/change_language <- Click to change language to english\n'
+                               '/trans твои слова (например: /trans cat, dog, town, light)\n'
+                               '/get_file\n'
+                               '/import_words\n'
+                               'можешь отправить xlsx файл c твоими словами боту')
 
 
 @dp.message_handler(commands=['set'])
 async def user_set(message):
+    user_id = message.from_user.id
+    user_file, quantity, language = get_users_file_quantity(user_id)
     try:
         quantity_of_words = int(message.text.split()[-1])
         change_quantity(message.from_user.id, quantity_of_words)
-        await message.reply(f"You chose {quantity_of_words} words")
-        await message.reply('Ok, now click /import_words')
+        await message.reply(
+            f"Quantity of words wich will be print = {quantity_of_words}" if language == 'eng' else f"Количество слов, которые будут выведены = {quantity_of_words}")
+        await message.reply('Ok, now click /import_words' if language == 'eng' else 'Теперь кликни на /import_words')
     except ValueError:
-        await message.reply(f"Error -> Enter one space and one number! Example:\n/set 6")
+        await message.reply(
+            f"Error -> Enter one space and one number! Example:\n/set 6" if language == 'eng' else 'Ошибка -> нажми 1 пробел и 1 число! Например:\n/set 6')
 
 
 @dp.message_handler(commands=['add'])
 async def user_add(message):
+    user_id = message.from_user.id
+    user_file, quantity, language = get_users_file_quantity(user_id)
     words = ''.join(message.text.split()[1:]).split(',')
     file_user = f'pathxl/{message.from_user.id}.xlsx'
     create_file(message, file_user)
@@ -113,23 +148,35 @@ async def user_add(message):
         sheet[f'A{i}'] = words[0]
         words.pop(0)
     wb.save(file_user)
-    await bot.send_message(message.from_user.id, f"Your words have added")
+    await bot.send_message(message.from_user.id,
+                           "Your words have added" if language == 'eng' else 'Твои слова были добавлены!')
 
 
 @dp.message_handler(content_types=types.ContentTypes.DOCUMENT)
 async def doc_handler(message: Message):
     """func to download xlsx files"""
     # TODO: сделать параметр, чтобы пользователь мог выбироать добвлять ли ему повторяющиеся слова или нет
+    user_id = message.from_user.id
+    user_file, quantity, language = get_users_file_quantity(user_id)
     file_user = f'pathxl/{message.from_user.id}.xlsx'
     try:
         f = open(file_user)
-        kb = [
-            [
-                types.KeyboardButton(text="YES"),
-                types.KeyboardButton(text="NO"),
-                types.KeyboardButton(text='Show my current file')
-            ],
-        ]
+        if language == 'eng':
+            kb = [
+                [
+                    types.KeyboardButton(text="YES"),
+                    types.KeyboardButton(text="NO"),
+                    types.KeyboardButton(text='Show my current file')
+                ],
+            ]
+        else:
+            kb = [
+                [
+                    types.KeyboardButton(text="ДА"),
+                    types.KeyboardButton(text="НЕТ"),
+                    types.KeyboardButton(text='Покажи мой текущий файл')
+                ],
+            ]
         keyboard = types.ReplyKeyboardMarkup(
             keyboard=kb,
             resize_keyboard=True,
@@ -142,7 +189,7 @@ async def doc_handler(message: Message):
     except FileNotFoundError:
         document = message.document
         await document.download(destination_file=f'pathxl/{message.from_user.id}00.xlsx')
-        await message.reply("File has been upload!")
+        await message.reply("File has been upload!" if language == 'eng' else 'Файл был загружен!')
 
 
 @dp.message_handler(commands=['import_words'])
@@ -150,13 +197,15 @@ async def write_in_file(message: Message):
     file_user = f'pathxl/{message.from_user.id}.xlsx'
     user_id = message.from_user.id
     create_file(message, file_user)
-    user_file, quantity = get_users_file_quantity(user_id)
+    user_file, quantity, language = get_users_file_quantity(user_id)
     added_words, error_words = go(file_user, quantity)
     final_text = ''
     print(added_words, error_words)
     for key, item in added_words.items():
         final_text += key + '//' + item + '\n'
-    await bot.send_message(message.from_user.id, final_text if final_text else "You should to add new words! Use /add command")
+    await bot.send_message(message.from_user.id,
+                           final_text if final_text else (
+                               "You should to add new words! Use /add command" if language == 'eng' else 'Вы должны добавить еще слов! Используйте комманду /add'))
 
 
 @dp.message_handler(commands=['get_file'])
@@ -178,7 +227,6 @@ async def get_file(message: Message):
     await message.reply_document(open(f'pathxl/{message.from_user.id}.xlsx', 'rb'))
 
 
-
 @dp.message_handler(commands=['trans'])
 async def write_in_file(message: Message):
     text = [i.strip() for i in ' '.join(message.text.split(' ')[1:]).split(',')]
@@ -192,9 +240,20 @@ async def write_in_file(message: Message):
         await bot.send_message(message.from_user.id, final_text)
 
 
-@dp.message_handler(lambda message: message.text == 'YES')
+@dp.message_handler(commands=['change_language'])
+async def command_change_language(message: Message):
+    user_id = message.from_user.id
+    change_language(user_id)
+    user_file, quantity, language = get_users_file_quantity(user_id)
+    await bot.send_message(user_id, 'Language changed successfully' if language == 'eng' else 'Язык успешно изменен')
+
+
+
+@dp.message_handler(lambda message: message.text in ['YES', 'ДА'])
 async def user_input(message):
     # check if '...00' is exist if true -> delete current file and rename new
+    user_id = message.from_user.id
+    user_file, quantity, language = get_users_file_quantity(user_id)
     try:
         f = open(f'pathxl/{message.from_user.id}00.xlsx')
         try:
@@ -203,28 +262,30 @@ async def user_input(message):
             pass
         f.close()
         os.rename(f'pathxl/{message.from_user.id}00.xlsx', f'pathxl/{message.from_user.id}.xlsx')
-        await bot.send_message(message.from_user.id, "Ok, your file has been updated")
+        await bot.send_message(message.from_user.id,
+                               "OK, your file has been replaced with a new one" if language == 'eng' else 'Хорошо, ваш файл был заменен на новый')
     except (FileExistsError, FileNotFoundError):
         # accidentally write YES
         print('here')
         pass
 
 
-
-
-@dp.message_handler(lambda message: message.text == 'NO')
+@dp.message_handler(lambda message: message.text in ['NO', 'НЕТ'])
 async def user_input(message):
     await bot.send_message(message.from_user.id, "Ok")
 
 
-@dp.message_handler(lambda message: message.text == 'Show my current file')
+@dp.message_handler(lambda message: message.text in ['Show my current file', 'Покажи мой текущий файл'])
 async def user_input(message):
     await message.reply_document(open(f'pathxl/{message.from_user.id}.xlsx', 'rb'))
 
 
 @dp.message_handler(content_types=['text'])
 async def user_input(message):
-    await bot.send_message(message.from_user.id, "Sorry but I can't to understand you, try to enter other commands")
+    user_id = message.from_user.id
+    user_file, quantity, language = get_users_file_quantity(user_id)
+    await bot.send_message(message.from_user.id,
+                           "Sorry but I can't to understand you, try to enter other commands" if language == 'eng' else 'Извините, но я вас не понимаю! Используйте команды')
 
 
 executor.start_polling(dp)
