@@ -8,10 +8,8 @@ import openpyxl
 import sqlite3
 from excel_parse import go
 from translator import *
-from dotenv import load_dotenv
 
-load_dotenv()
-TOKEN = os.environ.get('BOT_TOKEN')
+TOKEN = "Your_token"
 bot = Bot(token=TOKEN)
 dp = Dispatcher(bot)
 
