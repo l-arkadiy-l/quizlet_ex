@@ -1,7 +1,7 @@
 # Quizlet + Excel
 > 💡This bot will help you transfer words from excel to quizlet
 ## How to use?
-1. Click on the link to [BOT](https://t.me/crypto_kley_bot)
+1. Click on the link to [BOT](https://t.me/eng_importer_bot)
 2. Each user has his own xlsx file in `pathxl` folder (bot create new xlsx file if user has not his own file)
 3. If you have your excel file with english words it should look like this -> enter your words only in `A` column:
 
